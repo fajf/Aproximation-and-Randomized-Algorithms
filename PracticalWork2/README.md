@@ -4,5 +4,6 @@ Implementiram štiri algoritme za reševanje problema problema subset-sum, ki so
 1. Dinamično preiskovanje
 1. Izčrpno preiskovanje z rezanjem
 1. Požrešni 2-aproksimacijski algoritem
-1. FPTAS
+1. FPTAS  
+
 Generiram (naključne) instance problema in opazujem kako se posamezni algoritmi obnašajo na različnih vhodnih podatkih.
