@@ -1,17 +1,16 @@
 import org.jgrapht.Graph;
-import org.jgrapht.alg.connectivity.ConnectivityInspector;
 import org.jgrapht.generate.GnpRandomGraphGenerator;
-import org.jgrapht.graph.DefaultUndirectedWeightedGraph;
 import org.jgrapht.graph.DefaultWeightedEdge;
+import org.jgrapht.graph.SimpleWeightedGraph;
 import org.jgrapht.util.SupplierUtil;
 
-import java.util.*;
+import java.util.Random;
+import java.util.Set;
 import java.util.function.Supplier;
 
 public class TSP {
 
     private Graph<Integer, DefaultWeightedEdge> graph = null;
-
 
     /**
      * @return graph instance of this object
@@ -22,10 +21,14 @@ public class TSP {
 
 
     /**
+     * Generates instance of SimpleWeightedGraph with given parameters.
+     * Edges are not directed, no self-loops, no multiple edges between
+     * same two nodes and every edge has a weight.
+     *
      * @param numberNodes number of nodes in graph
      * @param probability probability with which edge between two nodes is created
      * @param seed random generators seed
-     * @return DefaultUndirectedWeightedGraph instance generated from above parameters
+     * @return SimpleWeightedGraph instance generated from above parameters
      */
     public Graph<Integer, DefaultWeightedEdge> generateInstance (int numberNodes, double probability, int seed)
     {
@@ -43,7 +46,7 @@ public class TSP {
 
         // create the graph object
         this.graph =
-                new DefaultUndirectedWeightedGraph<Integer, DefaultWeightedEdge>
+                new SimpleWeightedGraph<Integer, DefaultWeightedEdge>
                         (vSupplier, SupplierUtil.createDefaultWeightedEdgeSupplier());
 
         // create graph generator object
@@ -52,54 +55,86 @@ public class TSP {
 
         gnpRandomGraphGenerator.generateGraph(this.graph, null);
 
-        this.ensureGraphConnectivity();
+        if (this.graph == null) return null;
 
-        this.setRandomWeightToAllEdges(seed);
+        this.connectGraph(seed);
 
         return this.graph;
     }
 
     /**
-     * Ensures that there exists a path between any two vertices (nodes) in graph.
-     * If necessary method adds as many new connections as needed - but it keeps the number of
-     * new connections to a minimum.
-     */
-    private void ensureGraphConnectivity() {
-        ConnectivityInspector connectivityInspector = new ConnectivityInspector(this.graph);
-        List<Set> seznamMnozic = connectivityInspector.connectedSets();
-
-        // connect sets through vertices in sets sequence
-        ListIterator<Set> listIterator = seznamMnozic.listIterator();
-        Set<Integer> firstSet = listIterator.next();
-        while (listIterator.hasNext()){
-            Set<Integer> secondSet = listIterator.next();
-
-            // get first node from first set
-            Integer firstSetNode = firstSet.iterator().next();
-            // get first node from second set
-            Integer secondSetNode = secondSet.iterator().next();
-
-            // connect the two nodes
-            this.graph.addEdge(firstSetNode, secondSetNode);
-
-            // loop iteration over objects
-            firstSet = secondSet;
-        }
-    }
-
-    /**
-     * Sets a random double value between 0 and 1 to weight of every edge in the graph.
-     * Using Java.Random class object for generating random weights.
+     * Obeying the triangular inequality, creates a completelly connected graph.
+     * Using Java.Random class object for generating random weights / distances between points.
      *
      * @param seed random generator seed
      */
-    private void setRandomWeightToAllEdges(long seed) {
+    private void connectGraph(long seed) {
         Random random = new Random(seed);
 
-        for (DefaultWeightedEdge edge : this.graph.edgeSet())
-        {
-            this.graph.setEdgeWeight(edge, random.nextDouble());
+        Integer[] vozlisca = this.graph.vertexSet().toArray(new Integer[0]);
+
+        // if graph has only one point, we are done
+        if (vozlisca.length < 2) return;
+
+        for (int k = 1; k < vozlisca.length; k++) {
+            this.fullyConnectVertex(vozlisca, random, k);
         }
+    }
+
+    private void fullyConnectVertex(Integer[] vozlisca, Random random, int k) {
+        // choose next point "k" from the array to be a newPoint and create a connection to the first point
+        // assign random distance > 1
+        int newPoint = vozlisca[k];
+        int defaultUpperBound = (vozlisca.length * 10);
+
+        // add a connection between newPoint and first point on the graph
+        int weight = random.nextInt(defaultUpperBound);
+        if (weight == 0) weight++; // +1 because we don't want distance to be 0
+        this.addEdge(0, newPoint, weight);
+
+
+
+        // generate new edges betweeen newPoint and every other
+        for (int i = 1; i < k; i++) {
+            // calculate upper bound for next edges that are going to be added to this vertex
+            int upperBound = this.calculateUpperBound(weight, newPoint, i, defaultUpperBound);
+
+            weight = random.nextInt(upperBound);
+            if (weight == 0) weight++; // +1 because we don't want distance to be 0
+
+            this.addEdge(i,k,weight);
+        }
+    }
+
+    private int calculateUpperBound(int newEdgeWeight, int newPoint, int connectingPoint, int defaultUpperBound) {
+        // calculate the sum of lengths: (j-1) times from new point A to point B and from B to all other connected
+        // points, where j is the number of connections from B to all other point
+        Set<DefaultWeightedEdge> outgoingEdges = this.graph.outgoingEdgesOf(0);
+        int j = outgoingEdges.size();
+        int sumOfLengths = (j - 1) * newEdgeWeight;
+        for (DefaultWeightedEdge tmpEdge : outgoingEdges) {
+            sumOfLengths += this.graph.getEdgeWeight(tmpEdge);
+        }
+
+        int connectedVertices = newPoint + 1;
+        // above sum is the upper bound for generating random length from A to some point C != {A,B}
+        // we subtract the number of connections left to make from A, because we want it to be
+        // strong upper bound, because we don't want distance between any two points to be 0
+        int upperBound = sumOfLengths - (connectedVertices - 1 - this.graph.outDegreeOf(newPoint));
+        upperBound = Math.max(upperBound, defaultUpperBound);
+
+        // triangular inequality
+        int upperTriangle = newEdgeWeight +
+                (int) this.graph.getEdgeWeight(this.graph.getEdge(0,connectingPoint));
+
+        upperBound = Math.min(upperBound, upperTriangle);
+
+        return upperBound;
+    }
+
+    private void addEdge(int firstPoint, int secondPoint, int weight) {
+        DefaultWeightedEdge newEdge = this.graph.addEdge(firstPoint, secondPoint);
+        this.graph.setEdgeWeight(newEdge, weight);
     }
 
 

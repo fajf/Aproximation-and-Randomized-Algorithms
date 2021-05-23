@@ -4,10 +4,12 @@ import org.jgrapht.graph.DefaultWeightedEdge;
 public class Assignment {
     public static void main(String[] args) {
         // implement TSP instance generator that obeys triangular inequality
-        TSP tsp = new TSP();
-        tsp.generateInstance(10,0.2,12345);
 
-        printGraph(tsp.getGraph());
+        // create completely connected graph that will be our map of cities to visit
+        TSP map = new TSP();
+        map.generateInstance(500,0,12345);
+
+        printGraph(map.getGraph());
 
         // call different algorithms from class TSP
         // TODO
