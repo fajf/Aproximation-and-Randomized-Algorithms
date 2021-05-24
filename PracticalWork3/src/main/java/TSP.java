@@ -1,7 +1,9 @@
 import org.jgrapht.Graph;
+import org.jgrapht.Graphs;
 import org.jgrapht.generate.GnpRandomGraphGenerator;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.SimpleWeightedGraph;
+import org.jgrapht.graph.builder.GraphTypeBuilder;
 import org.jgrapht.util.SupplierUtil;
 
 import java.util.Random;
@@ -19,7 +21,6 @@ public class TSP {
         return this.graph;
     }
 
-
     /**
      * Generates instance of SimpleWeightedGraph with given parameters.
      * Edges are not directed, no self-loops, no multiple edges between
@@ -30,7 +31,7 @@ public class TSP {
      * @param seed random generators seed
      * @return SimpleWeightedGraph instance generated from above parameters
      */
-    public Graph<Integer, DefaultWeightedEdge> generateInstance (int numberNodes, double probability, int seed)
+    public Graph<Integer, DefaultWeightedEdge> generateInstance (int numberNodes, double probability, int seed, boolean connect)
     {
         // Create the VertexFactory so the generator can create vertices
         Supplier<Integer> vSupplier = new Supplier<Integer>()
@@ -57,7 +58,7 @@ public class TSP {
 
         if (this.graph == null) return null;
 
-        this.connectGraph(seed);
+        if (connect) this.connectGraph(seed);
 
         return this.graph;
     }
@@ -153,10 +154,135 @@ public class TSP {
         this.graph.setEdgeWeight(newEdge, weight);
     }
 
+    /**
+     * Create a copy of a graph for internal use
+     *
+     * @param graph the graph to copy
+     * @return A copy of the graph projected to a SimpleGraph
+     */
+    private static <V, E> Graph<V, E> copyAsSimpleWeightedGraph(Graph<V, E> graph)
+    {
+        Graph<V,
+                E> copy = GraphTypeBuilder
+                .<V, E> undirected().weighted(true).edgeSupplier(graph.getEdgeSupplier())
+                .vertexSupplier(graph.getVertexSupplier()).allowingMultipleEdges(false)
+                .allowingSelfLoops(false).buildGraph();
+        if (graph.getType().isSimple())
+        {
+            Graphs.addGraph(copy, graph);
+        }
+        else
+        {
+            // project graph to SimpleWeightedGraph
+            Graphs.addAllVertices(copy, graph.vertexSet());
+            for (E e : graph.edgeSet()) {
+                V v1 = graph.getEdgeSource(e);
+                V v2 = graph.getEdgeTarget(e);
+                if (!v1.equals(v2) && !copy.containsEdge(e)) {
+                    copy.addEdge(v1, v2);
+                }
+            }
+        }
+        return copy;
+    }
 
-    // TODO simple greedy algorithm
-    public void greedyNearestNeighbour () {
 
+    /**
+     * Solves Travelling Salesman Person problem using greedy nearest neighbour algorithm.
+     *
+     * @param seed seed for object of Java.Random class
+     * @return graph containing constructed solution
+     */
+    public SimpleWeightedGraph<Integer, DefaultWeightedEdge> greedyNearestNeighbour (long seed) {
+        SimpleWeightedGraph<Integer, DefaultWeightedEdge> map =
+                (SimpleWeightedGraph<Integer, DefaultWeightedEdge>) copyAsSimpleWeightedGraph(this.graph);
+
+        // create new graph on which we will construct a solution
+        SimpleWeightedGraph<Integer, DefaultWeightedEdge> solution =
+                (SimpleWeightedGraph<Integer, DefaultWeightedEdge>)
+                        generateInstance(0,0,0,false);
+
+        greedyNearestNeighbourCore(map, solution, seed);
+
+        return solution;
+    }
+
+    private void greedyNearestNeighbourCore(SimpleWeightedGraph<Integer,
+            DefaultWeightedEdge> map, SimpleWeightedGraph<Integer, DefaultWeightedEdge> solution, long seed)
+    {
+        // choose random starting point
+        Random random = new Random(seed);
+        int firstPoint = random.nextInt(map.vertexSet().size());
+
+        // add first point to solution
+        solution.addVertex(firstPoint);
+
+        // visit closest neighbour until solution graph contains all vertices from given graph
+        while (map.vertexSet().size() != solution.vertexSet().size())
+        {
+            // get closest point to the firstPoint
+            DefaultWeightedEdge edge = getShortestConnection(map, solution, firstPoint);
+            int secondPoint =
+                    firstPoint == map.getEdgeSource(edge) ?
+                            map.getEdgeTarget(edge) : map.getEdgeSource(edge);
+
+            // add secondPoint and edge to solution
+            addVertexAndEdge(solution,firstPoint,secondPoint,edge);
+
+            // closest point is new start
+            firstPoint = secondPoint;
+        }
+        // add connection from last to first point
+        addLastToFirst(solution,map,firstPoint);
+    }
+
+    private void addLastToFirst(SimpleWeightedGraph<Integer, DefaultWeightedEdge> solution,
+                                SimpleWeightedGraph<Integer, DefaultWeightedEdge> map, int firstPoint)
+    {
+        int secondPoint = solution.vertexSet().iterator().next();
+        Set<DefaultWeightedEdge> conn = map.edgesOf(firstPoint);
+        DefaultWeightedEdge edge = null;
+        for (DefaultWeightedEdge tmp : conn)
+        {
+            if (secondPoint == map.getEdgeSource(tmp) || secondPoint == map.getEdgeTarget(tmp))
+            {
+                edge = tmp;
+                break;
+            }
+        }
+        addVertexAndEdge(solution,firstPoint,secondPoint,edge);
+    }
+
+    private void addVertexAndEdge(SimpleWeightedGraph<Integer, DefaultWeightedEdge> solution,
+                                  int firstPoint, int secondPoint, DefaultWeightedEdge edge) {
+        solution.addVertex(secondPoint);
+        // create new edge with correct source and target vertices
+        DefaultWeightedEdge newEdge = solution.addEdge(firstPoint,secondPoint);
+        solution.setEdgeWeight(newEdge, solution.getEdgeWeight(edge));
+    }
+
+    private DefaultWeightedEdge getShortestConnection(
+            SimpleWeightedGraph<Integer, DefaultWeightedEdge> map,
+            SimpleWeightedGraph<Integer, DefaultWeightedEdge> solution, int firstPoint) {
+
+        Set<DefaultWeightedEdge> allConn = map.edgesOf(firstPoint);
+
+        DefaultWeightedEdge shortest = new DefaultWeightedEdge();
+        map.setEdgeWeight(shortest, Double.MAX_VALUE);
+        for (DefaultWeightedEdge edge : allConn)
+        {
+            // because we work with undirected connections, manually check which one is target
+            int targetVertex =
+                    firstPoint == map.getEdgeSource(edge) ?
+                            map.getEdgeTarget(edge) : map.getEdgeSource(edge);
+
+            if (map.getEdgeWeight(edge) < map.getEdgeWeight(shortest) &&
+                !solution.containsVertex(targetVertex))
+            {
+                shortest = edge;
+            }
+        }
+        return shortest;
     }
 
     // TODO 2-APX algorithm
