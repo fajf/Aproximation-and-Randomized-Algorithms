@@ -63,7 +63,7 @@ public class TSP {
     }
 
     /**
-     * Obeying the triangular inequality, creates a completelly connected graph.
+     * Obeying the triangular inequality, creates a completely connected graph.
      * Using Java.Random class object for generating random weights / distances between points.
      *
      * @param seed random generator seed
@@ -92,8 +92,6 @@ public class TSP {
         if (weight == 0) weight++; // +1 because we don't want distance to be 0
         this.addEdge(0, newPoint, weight);
 
-
-
         // generate new edges betweeen newPoint and every other
         for (int i = 1; i < k; i++) {
             // calculate upper bound for next edges that are going to be added to this vertex
@@ -106,27 +104,45 @@ public class TSP {
         }
     }
 
+    /**
+     * Calculates maximal distance from newPoint to connectingPoint in the way triangular
+     * inequality holds for all triangles on graph.
+     *
+     * @param newEdgeWeight weight of edge between new point and first point (point zero)
+     * @param newPoint id of point we are adding
+     * @param connectingPoint id of point we are currently connecting new point to
+     * @param defaultUpperBound default upper bound. Set -1, if you don't want to specify it
+     * @return
+     */
     private int calculateUpperBound(int newEdgeWeight, int newPoint, int connectingPoint, int defaultUpperBound) {
-        // calculate the sum of lengths: (j-1) times from new point A to point B and from B to all other connected
-        // points, where j is the number of connections from B to all other point
-        Set<DefaultWeightedEdge> outgoingEdges = this.graph.outgoingEdgesOf(0);
-        int j = outgoingEdges.size();
-        int sumOfLengths = (j - 1) * newEdgeWeight;
-        for (DefaultWeightedEdge tmpEdge : outgoingEdges) {
-            sumOfLengths += this.graph.getEdgeWeight(tmpEdge);
+        int upperBound;
+
+        if (defaultUpperBound == -1)
+        {
+            upperBound = Integer.MAX_VALUE;
         }
+        else {
+            // calculate the sum of lengths: (j-1) times from new point A to point B and from B to all other connected
+            // points, where j is the number of connections from B to all other point
+            Set<DefaultWeightedEdge> outgoingEdges = this.graph.outgoingEdgesOf(0);
+            int j = outgoingEdges.size();
+            int sumOfLengths = (j - 1) * newEdgeWeight;
+            for (DefaultWeightedEdge tmpEdge : outgoingEdges) {
+                sumOfLengths += this.graph.getEdgeWeight(tmpEdge);
+            }
 
-        int connectedVertices = newPoint + 1;
-        // above sum is the upper bound for generating random length from A to some point C != {A,B}
-        // we subtract the number of connections left to make from A, because we want it to be
-        // strong upper bound, because we don't want distance between any two points to be 0
-        int upperBound = sumOfLengths - (connectedVertices - 1 - this.graph.outDegreeOf(newPoint));
-        upperBound = Math.max(upperBound, defaultUpperBound);
-
+            int connectedVertices = newPoint + 1;
+            // above sum is the upper bound for generating random length from A to some point C != {A,B}
+            // we subtract the number of connections left to make from A, because we want it to be
+            // strong upper bound, because we don't want distance between any two points to be 0
+            upperBound = sumOfLengths - (connectedVertices - 1 - this.graph.outDegreeOf(newPoint));
+            upperBound = Math.max(upperBound, defaultUpperBound);
+        }
         // triangular inequality
         int upperTriangle = newEdgeWeight +
                 (int) this.graph.getEdgeWeight(this.graph.getEdge(0,connectingPoint));
 
+        // set to min so we hold to triangular inequality of current triangle and all other triangles
         upperBound = Math.min(upperBound, upperTriangle);
 
         return upperBound;
