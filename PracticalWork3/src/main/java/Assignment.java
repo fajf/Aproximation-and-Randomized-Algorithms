@@ -7,12 +7,12 @@ public class Assignment {
         // implement TSP instance generator that obeys triangular inequality
         // create completely connected graph that will be our map of cities to visit
         TSP tsp = new TSP();
-        tsp.generateInstance(50,0,12774, true);
+        tsp.generateInstance(3,0,12774, true);
         printGraph(tsp.getGraph());
 
         // call different algorithms from class TSP
-        SimpleWeightedGraph<Integer, DefaultWeightedEdge> solution = tsp.greedyNearestNeighbour(54321);
-        printGraph(solution);
+        SimpleWeightedGraph<Integer, DefaultWeightedEdge> solutionGreedy = tsp.greedyNearestNeighbour(54321);
+        printGraph(solutionGreedy);
         // TODO
         // analyze their performance and runtime
         // TODO
