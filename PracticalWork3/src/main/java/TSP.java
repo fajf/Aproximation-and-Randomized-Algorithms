@@ -56,8 +56,11 @@ public class TSP {
                         (vSupplier, SupplierUtil.createDefaultWeightedEdgeSupplier());
 
         // create graph generator object
-        GnpRandomGraphGenerator<Integer, DefaultWeightedEdge> gnpRandomGraphGenerator =
+        GnpRandomGraphGenerator<Integer, DefaultWeightedEdge> gnpRandomGraphGenerator = null;
+        if (seed != -1) gnpRandomGraphGenerator =
                 new GnpRandomGraphGenerator<>(numberNodes, probability, seed);
+        else gnpRandomGraphGenerator =
+                new GnpRandomGraphGenerator<>(numberNodes, probability);
 
         gnpRandomGraphGenerator.generateGraph(this.graph, null);
 
@@ -116,19 +119,66 @@ public class TSP {
 
         // construct MST from starting point using Prim's Algorithm
         solution = createMinimumSpanningTree(map,solution,firstPoint);
+        System.out.println(solution.toString());
 
         // List vertices visited in preorder walk of the constructed MST
-        Iterator iterator = solution.outgoingEdgesOf(0).iterator();
-        while (iterator.hasNext())
-        {
-            System.out.println(iterator.next().toString());
-        }
+        solution = preorderWalk(map, solution, firstPoint);
 
         // add starting point at the end
+        addEdge(solution,
+                (int) solution.vertexSet().toArray()[solution.vertexSet().size()-1],
+                firstPoint,
+                (int) map.getEdgeWeight(
+                        map.getEdge(
+                                (int) solution.vertexSet().toArray()[solution.vertexSet().size()-1],
+                                firstPoint)
+                )
+        );
 
         // return the solution
-
         return solution;
+    }
+
+    private SimpleWeightedGraph<Integer, DefaultWeightedEdge> preorderWalk(
+            SimpleWeightedGraph<Integer, DefaultWeightedEdge> map,
+            SimpleWeightedGraph<Integer, DefaultWeightedEdge> solution, int firstPoint)
+    {
+        // new graph to which we will save the preorder walk
+        SimpleWeightedGraph<Integer, DefaultWeightedEdge> walk =
+                (SimpleWeightedGraph<Integer, DefaultWeightedEdge>)
+                        generateInstance(0,0,0,false);
+
+        // add starting point to the walk
+        walk.addVertex(firstPoint);
+
+        // add all its edges
+        doStep(map, solution, walk, firstPoint);
+
+        return walk;
+    }
+
+    private void doStep(SimpleWeightedGraph<Integer, DefaultWeightedEdge> map,
+                        SimpleWeightedGraph<Integer, DefaultWeightedEdge> msp,
+                        SimpleWeightedGraph<Integer, DefaultWeightedEdge> walk, int sourcePoint) {
+        // get all connections from MSP for source point
+        Iterator<DefaultWeightedEdge> iterator = msp.edgesOf(sourcePoint).iterator();
+        // add every connection in the sequence (from left to right)
+        while (iterator.hasNext())
+        {
+            DefaultWeightedEdge edge = iterator.next();
+            // but only if source point is actually the source
+            if (msp.getEdgeSource(edge) == sourcePoint)
+            {
+                // add edge to the walk
+                // starting point of edge should be previously added point
+                int startingPoint = (int) walk.vertexSet().toArray()[walk.vertexSet().size()-1];
+                int target = msp.getEdgeTarget(edge);
+                int weight = (int) map.getEdgeWeight(map.getEdge(startingPoint,target));
+                addVertexAndEdge(walk, startingPoint, target, weight);
+                // make a recursive call - depth first traversal
+                doStep(map, msp, walk, target);
+            }
+        }
     }
 
     private SimpleWeightedGraph<Integer, DefaultWeightedEdge> createMinimumSpanningTree(
@@ -171,7 +221,9 @@ public class TSP {
      * @param seed random generator seed
      */
     private void completelyConnectGraph(long seed) {
-        Random random = new Random(seed);
+        Random random;
+        if (seed != -1) random = new Random(seed);
+        else random = new Random();
 
         Integer[] vozlisca = this.graph.vertexSet().toArray(new Integer[0]);
 
@@ -304,7 +356,9 @@ public class TSP {
             DefaultWeightedEdge> map, SimpleWeightedGraph<Integer, DefaultWeightedEdge> solution, long seed)
     {
         // choose random starting point
-        Random random = new Random(seed);
+        Random random;
+        if (seed != -1) random = new Random(seed);
+        else random = new Random();
         int firstPoint = random.nextInt(map.vertexSet().size());
 
         // add first point to solution
