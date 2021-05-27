@@ -119,7 +119,6 @@ public class TSP {
 
         // construct MST from starting point using Prim's Algorithm
         solution = createMinimumSpanningTree(map,solution,firstPoint);
-        System.out.println(solution.toString());
 
         // List vertices visited in preorder walk of the constructed MST
         solution = preorderWalk(map, solution, firstPoint);
@@ -236,25 +235,27 @@ public class TSP {
     }
 
     private void fullyConnectVertex(Integer[] vozlisca, Random random, int k) {
-        // choose next point "k" from the array to be a newPoint and create a connection to the first point
+        // connect point "k" to the graph
         // assign random distance > 1
-        int newPoint = vozlisca[k];
-        int defaultUpperBound = (vozlisca.length * 10);
+        int defaultUpperBound = (vozlisca.length * 100);
 
-        // add a connection between newPoint and first point on the graph
+        // add a connection between k and first point on the graph
         int weight = random.nextInt(defaultUpperBound);
         if (weight == 0) weight++; // +1 because we don't want distance to be 0
-        this.addEdge((SimpleWeightedGraph<Integer, DefaultWeightedEdge>) this.graph,0, newPoint, weight);
+        addEdge((SimpleWeightedGraph<Integer, DefaultWeightedEdge>) this.graph,0, k, weight);
 
-        // generate new edges betweeen newPoint and every other
+        // generate new edges betweeen newPoint and every other point already on the graph
         for (int i = 1; i < k; i++) {
-            // calculate upper bound for next edges that are going to be added to this vertex
-            int upperBound = this.calculateUpperBound(weight, newPoint, i, defaultUpperBound);
+            // calculate upper & lower bound for next edge that is going to be added to this vertex
+            int upperBound = calculateUpperBound(this.graph, k, i);
+            int lowerBound = calculateLowerBound(this.graph, k, i);
 
-            weight = random.nextInt(upperBound);
-            if (weight == 0) weight++; // +1 because we don't want distance to be 0
+            // get random value between lower and upper bounds
+            int diff = upperBound - lowerBound;
+            weight = random.nextInt(diff);
+            weight += lowerBound;
 
-            this.addEdge((SimpleWeightedGraph<Integer, DefaultWeightedEdge>) this.graph,i,k,weight);
+            this.addEdge((SimpleWeightedGraph<Integer, DefaultWeightedEdge>) this.graph, i, k, weight);
         }
     }
 
@@ -262,44 +263,59 @@ public class TSP {
      * Calculates maximal distance from newPoint to connectingPoint in the way triangular
      * inequality holds for all triangles on graph.
      *
-     * @param newEdgeWeight weight of edge between new point and first point (point zero)
-     * @param newPoint id of point we are adding
-     * @param connectingPoint id of point we are currently connecting new point to
-     * @param defaultUpperBound default upper bound. Set -1, if you don't want to specify it
+     * @param graph
+     * @param x id of the point we are trying to add on a graph
+     * @param z id of point we are currently trying to connect to
      * @return
      */
-    private int calculateUpperBound(int newEdgeWeight, int newPoint, int connectingPoint, int defaultUpperBound) {
-        int upperBound;
+    private int calculateUpperBound(Graph<Integer, DefaultWeightedEdge> graph, int x, int z) {
+        int upperBound = Integer.MAX_VALUE;
 
-        if (defaultUpperBound == -1)
+        // for each point (z) we are connecting to, check upper bound considering triangle inequality from us (x) to
+        // every other point we are already connected to (y) and than from that point (y) to our new target (z)
+
+        // na vse točke na katere sem že povezan
+        for (int y = 0; y < graph.outDegreeOf(x); y++)
         {
-            upperBound = Integer.MAX_VALUE;
-        }
-        else {
-            // calculate the sum of lengths: (j-1) times from new point A to point B and from B to all other connected
-            // points, where j is the number of connections from B to all other point
-            Set<DefaultWeightedEdge> outgoingEdges = this.graph.outgoingEdgesOf(0);
-            int j = outgoingEdges.size();
-            int sumOfLengths = (j - 1) * newEdgeWeight;
-            for (DefaultWeightedEdge tmpEdge : outgoingEdges) {
-                sumOfLengths += this.graph.getEdgeWeight(tmpEdge);
-            }
+            int prviDel = (int) graph.getEdgeWeight(graph.getEdge(x,y));
+            // in potem iz tistih točk do točke, na katero se povezujem
+            int drugiDel = (int) graph.getEdgeWeight(graph.getEdge(y,z));
 
-            int connectedVertices = newPoint + 1;
-            // above sum is the upper bound for generating random length from A to some point C != {A,B}
-            // we subtract the number of connections left to make from A, because we want it to be
-            // strong upper bound, because we don't want distance between any two points to be 0
-            upperBound = sumOfLengths - (connectedVertices - 1 - this.graph.outDegreeOf(newPoint));
-            upperBound = Math.max(upperBound, defaultUpperBound);
+            if (prviDel+drugiDel < upperBound) upperBound = prviDel + drugiDel;
         }
-        // triangular inequality
-        int upperTriangle = newEdgeWeight +
-                (int) this.graph.getEdgeWeight(this.graph.getEdge(0,connectingPoint));
-
-        // set to min so we hold to triangular inequality of current triangle and all other triangles
-        upperBound = Math.min(upperBound, upperTriangle);
 
         return upperBound;
+    }
+
+    /**
+     * Calculates minimum distance from newPoint to connectingPoint in the way triangular
+     * inequality holds for all triangles on graph.
+     *
+     * @param graph
+     * @param x id of the point we are trying to add on a graph
+     * @param z id of point we are currently trying to connect to
+     * @return
+     */
+    private int calculateLowerBound(Graph<Integer, DefaultWeightedEdge> graph, int x, int z) {
+        // set to 1, because we don't want point on graph to be on the same positions
+        int lowerBound = 1;
+
+        // for each point (z) we are connecting to, check upper bound considering triangle inequality from us (x) to
+        // every other point we are already connected to (y) and than from that point (y) to our new target (z)
+
+        // na vse točke na katere sem že povezan
+        for (int y = 0; y < graph.outDegreeOf(x); y++)
+        {
+            int prviDel = (int) graph.getEdgeWeight(graph.getEdge(x,y));
+            // in potem iz tistih točk do točke, na katero se povezujem
+            int drugiDel = (int) graph.getEdgeWeight(graph.getEdge(y,z));
+
+            int val = Math.abs(prviDel-drugiDel);
+
+            if (val > lowerBound) lowerBound = val;
+        }
+
+        return lowerBound;
     }
 
     /**
