@@ -6,6 +6,7 @@ import org.jgrapht.graph.SimpleWeightedGraph;
 import org.jgrapht.graph.builder.GraphTypeBuilder;
 import org.jgrapht.util.SupplierUtil;
 
+import java.util.Iterator;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -19,6 +20,10 @@ public class TSP {
      */
     public Graph<Integer, DefaultWeightedEdge> getGraph() {
         return this.graph;
+    }
+
+    public void setGraph(Graph<Integer, DefaultWeightedEdge> graph) {
+        this.graph = graph;
     }
 
     /**
@@ -70,10 +75,11 @@ public class TSP {
      * @return graph containing constructed solution
      */
     public SimpleWeightedGraph<Integer, DefaultWeightedEdge> greedyNearestNeighbour (long seed) {
-        SimpleWeightedGraph<Integer, DefaultWeightedEdge> map =
+        // first create a copy of the graph, because we don't want to change the generated instance
+        final SimpleWeightedGraph<Integer, DefaultWeightedEdge> map =
                 (SimpleWeightedGraph<Integer, DefaultWeightedEdge>) copyAsSimpleWeightedGraph(this.graph);
 
-        // create new graph on which we will construct a solution
+        // create a new graph on which we will construct a solution
         SimpleWeightedGraph<Integer, DefaultWeightedEdge> solution =
                 (SimpleWeightedGraph<Integer, DefaultWeightedEdge>)
                         generateInstance(0,0,seed,false);
@@ -86,7 +92,76 @@ public class TSP {
     // TODO 2-APX algorithm
     public SimpleWeightedGraph<Integer, DefaultWeightedEdge> apxAlgorithm(long seed)
     {
-        return null;
+        // first create a copy of the graph, because we don't want to change the generated instance
+        final SimpleWeightedGraph<Integer, DefaultWeightedEdge> map =
+                (SimpleWeightedGraph<Integer, DefaultWeightedEdge>) copyAsSimpleWeightedGraph(this.graph);
+
+        // create a new graph on which we will construct a solution
+        SimpleWeightedGraph<Integer, DefaultWeightedEdge> solution =
+                (SimpleWeightedGraph<Integer, DefaultWeightedEdge>)
+                        generateInstance(0,0,seed,false);
+
+        return apxCore(map, solution, seed);
+    }
+
+    private SimpleWeightedGraph<Integer, DefaultWeightedEdge> apxCore(
+            SimpleWeightedGraph<Integer, DefaultWeightedEdge> map,
+            SimpleWeightedGraph<Integer, DefaultWeightedEdge> solution, long seed)
+    {
+        // select starting point - which is also ending points
+        Random random;
+        if (seed == -1) random = new Random();
+        else random = new Random(seed);
+        int firstPoint = random.nextInt(map.vertexSet().size());
+
+        // construct MST from starting point using Prim's Algorithm
+        solution = createMinimumSpanningTree(map,solution,firstPoint);
+
+        // List vertices visited in preorder walk of the constructed MST
+        Iterator iterator = solution.outgoingEdgesOf(0).iterator();
+        while (iterator.hasNext())
+        {
+            System.out.println(iterator.next().toString());
+        }
+
+        // add starting point at the end
+
+        // return the solution
+
+        return solution;
+    }
+
+    private SimpleWeightedGraph<Integer, DefaultWeightedEdge> createMinimumSpanningTree(
+            SimpleWeightedGraph<Integer, DefaultWeightedEdge> map,
+            SimpleWeightedGraph<Integer, DefaultWeightedEdge> solution, int firstPoint)
+    {
+        // add first point to the solution
+        solution.addVertex(firstPoint);
+
+        // until our MST does not include all vertices from graph instance (map)
+        while (map.vertexSet().size() != solution.vertexSet().size()) {
+            // for every node in solution get its shortest connection to a point not yet
+            // in solution and keep the minimum of them all
+            DefaultWeightedEdge shortest = new DefaultWeightedEdge();
+            map.setEdgeWeight(shortest, Double.MAX_VALUE);
+            for (Integer solutionPoint : solution.vertexSet()) {
+                DefaultWeightedEdge tmp = getShortestConnection(map, solution, solutionPoint);
+                if (map.getEdgeWeight(tmp) < map.getEdgeWeight(shortest)) shortest = tmp;
+            }
+
+            // add new vertex and edge to the solution
+            firstPoint = map.getEdgeSource(shortest);
+            int target = map.getEdgeTarget(shortest);
+            // check if orientation is right
+            if (!solution.containsVertex(firstPoint))
+            {
+                firstPoint = target;
+                target = map.getEdgeSource(shortest);
+            }
+            addVertexAndEdge(solution, firstPoint, target, (int) map.getEdgeWeight(shortest));
+        }
+
+        return solution;
     }
 
     /**
@@ -281,11 +356,12 @@ public class TSP {
         // sets new edge to have max. possible weight
         DefaultWeightedEdge shortest = new DefaultWeightedEdge();
         map.setEdgeWeight(shortest, Double.MAX_VALUE);
+        int targetVertex = -1;
         for (DefaultWeightedEdge edge : allConn)
         {
             // because we work with undirected connections, manually check which one is target
             // and set it as target
-            int targetVertex =
+            targetVertex =
                     firstPoint == map.getEdgeSource(edge) ?
                             map.getEdgeTarget(edge) : map.getEdgeSource(edge);
 
@@ -297,6 +373,7 @@ public class TSP {
                 shortest = edge;
             }
         }
+
         return shortest;
     }
 
