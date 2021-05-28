@@ -8,7 +8,7 @@ public class Assignment {
     static long instanceSeed = 666;
     static long algorithmsSeed = 123;
     final static int numNodes = 200;
-    final static int numOfRepetitions = 1000;
+    final static int numOfRepetitions = 10;
     final static boolean randomGraph = false;
 
     public static void main(String[] args) {
@@ -17,7 +17,7 @@ public class Assignment {
         TSP tsp = new TSP();
         SimpleWeightedGraph<Integer, DefaultWeightedEdge> solutionGreedy;
         SimpleWeightedGraph<Integer, DefaultWeightedEdge> solutionApx;
-        SimpleWeightedGraph<Integer, DefaultWeightedEdge> instance;
+        SimpleWeightedGraph<Integer, DefaultWeightedEdge> instance = null;
         int i = 0;
 
         do {
@@ -27,33 +27,36 @@ public class Assignment {
                 instanceSeed = random.nextLong();
             }
 
-            instance =
-                    (SimpleWeightedGraph<Integer, DefaultWeightedEdge>)
-                            tsp.generateInstance(numNodes, 0, instanceSeed, true);
+            if (randomGraph || i == 0)
+                instance =
+                        (SimpleWeightedGraph<Integer, DefaultWeightedEdge>)
+                                tsp.generateInstance(numNodes, 0, instanceSeed, true);
 
-            // call different algorithms from class TSP
+            if (!randomGraph) algorithmsSeed++;
+
+            // call greedy neighbour first algorithm
             solutionGreedy = tsp.greedyNearestNeighbour(algorithmsSeed);
-
-
             // reset graph instance, to be extra safe
             tsp.setGraph(instance);
+            // call 2-apx algorithm
             solutionApx = tsp.apxAlgorithm(algorithmsSeed);
+            // reset graph instance, to be extra safe
+            tsp.setGraph(instance);
+            // TODO call Christofides Algorithm
 
             i++;
             System.out.println(i);
         } while (getDistance(solutionGreedy)*2 >= getDistance(solutionApx) && i < numOfRepetitions);
 
-        printGraph(instance);
-        printGraph(solutionGreedy);
-        printGraph(solutionApx);
-        printDistance(solutionGreedy);
-        printDistance(solutionApx);
-        System.out.println("i: " + i);
-        System.out.println("Instance seed: " + instanceSeed);
+        //printGraph(instance);
+        //printGraph(solutionGreedy);
+        //printGraph(solutionApx);
+        //printDistance(solutionGreedy);
+        //printDistance(solutionApx);
+        //System.out.println("i: " + i);
+        //System.out.println("Instance seed: " + instanceSeed);
 
-        // TODO
-        // analyze their performance and runtime
-        // TODO
+        // TODO analyze performance and runtime
     }
 
     private static int getDistance(SimpleWeightedGraph<Integer, DefaultWeightedEdge> graph) {
