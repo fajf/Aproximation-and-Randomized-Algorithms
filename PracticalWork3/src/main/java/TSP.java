@@ -1,13 +1,17 @@
 import org.jgrapht.Graph;
+import org.jgrapht.GraphPath;
 import org.jgrapht.Graphs;
+import org.jgrapht.alg.cycle.HierholzerEulerianCycle;
 import org.jgrapht.alg.interfaces.MatchingAlgorithm;
+import org.jgrapht.alg.matching.blossom.v5.KolmogorovWeightedPerfectMatching;
+import org.jgrapht.alg.tour.ChristofidesThreeHalvesApproxMetricTSP;
 import org.jgrapht.generate.GnpRandomGraphGenerator;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.SimpleWeightedGraph;
 import org.jgrapht.graph.builder.GraphTypeBuilder;
 import org.jgrapht.util.SupplierUtil;
-import org.jgrapht.alg.matching.blossom.v5.KolmogorovWeightedPerfectMatching;
 
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Random;
 import java.util.Set;
@@ -141,38 +145,81 @@ public class TSP {
     }
 
     // TODO Christofides Algorithm
-    public SimpleWeightedGraph<Integer, DefaultWeightedEdge> christofidesAlgorithm(long seed)
+    public boolean christofidesAlgorithm(long seed)
     {
         // first create a copy of the graph, because we don't want to change the generated instance
         final SimpleWeightedGraph<Integer, DefaultWeightedEdge> map =
                 (SimpleWeightedGraph<Integer, DefaultWeightedEdge>) copyAsSimpleWeightedGraph(this.graph);
 
-        // 1. Create a minimum spanning tree MST of G.
+        // TODO ----------------------------------------------------------------------------
+        // TODO using library
+        ChristofidesThreeHalvesApproxMetricTSP<Integer,DefaultWeightedEdge> tsp =
+                new ChristofidesThreeHalvesApproxMetricTSP<>();
+        System.out.println("LIBRARY: " + tsp.getTour(this.graph).toString());
+
+
+        // TODO ----------------------------------------------------------------------------
+
+        // 1. Compute a minimum spanning tree in the input graph
         final SimpleWeightedGraph<Integer, DefaultWeightedEdge> mst = createMinimumSpanningTree(
                 map,
                 (SimpleWeightedGraph<Integer, DefaultWeightedEdge>) generateInstance(0,0,seed,false),
                 new Random(seed).nextInt(map.vertexSet().size())
         );
 
-        // 2. Let O be the set of vertices with odd degree in MST. By the handshaking lemma, O has an even number of vertices.
-        // Create induced subgraph of "map" given by the vertices from O
-        SimpleWeightedGraph<Integer, DefaultWeightedEdge> subgraphFromO = createSubgraphWithOddDegreeVertices(map, mst);
+        // 2. Find vertices with odd degree in the MST.
+        final Set<Integer> oddVertices = getOddVertices(mst);
 
-        // 3. Find a minimum-weight perfect matching M in the induced subgraph given by the vertices from O.
-        MatchingAlgorithm.Matching<Integer, DefaultWeightedEdge> perfectMatching = createMinimumWeightPerfectMatching(subgraphFromO);
+        // 3. Create induced subgraph of "map" given by the oddVertices
+        final SimpleWeightedGraph<Integer, DefaultWeightedEdge> inducedSubgraph = createInducedSubgraph(map, oddVertices);
 
-        // 4. Combine the edges of M and T to form a connected multigraph H in which each vertex has even degree.
-        final SimpleWeightedGraph<Integer,DefaultWeightedEdge> multigraph = combineMatchingWithMST(mst, perfectMatching);
+        // 4. Compute minimum weight perfect matching in the induced subgraph on odd degree vertices.
+        final MatchingAlgorithm.Matching<Integer, DefaultWeightedEdge> perfectMatching = createMinimumWeightPerfectMatching(inducedSubgraph);
 
-        // TODO 5. Form an Eulerian circuit in H.
-        // TODO 6. Make the circuit found in previous step into a Hamiltonian circuit by skipping repeated vertices (shortcutting).
+        // 5. Add edges from the minimum weight perfect matching to the MST (forming a pseudograph).
+        final SimpleWeightedGraph<Integer,DefaultWeightedEdge> pseudograph = combineMatchingWithMST(mst, perfectMatching);
 
-        // create a new graph on which we will construct a solution
-        SimpleWeightedGraph<Integer, DefaultWeightedEdge> solution =
-                (SimpleWeightedGraph<Integer, DefaultWeightedEdge>)
-                        generateInstance(0,0,seed,false);
+        // 6. Compute an Eulerian cycle in the obtained pseudograph
+        GraphPath<Integer,DefaultWeightedEdge> eulerTour = getEulerianTour(pseudograph);
+        if (eulerTour == null) {
+            System.out.println("MST: " + mst.toString());
+            System.out.println("Odd vertices: " + oddVertices.toString());
+            System.out.println("induced subgraph: " + inducedSubgraph.toString());
+            System.out.println("perfect matching: " + perfectMatching.toString());
+            System.out.println("first edge from matching weight: " + map.getEdgeWeight((DefaultWeightedEdge) perfectMatching.getEdges().toArray()[0]));
+            System.out.println("pseudograph: " + pseudograph.toString());
+            return false;
+        }
 
-        return apxCore(map, solution, seed);
+        // TODO 7. Form a closed tour in Eulerian cycle
+
+
+        return true;
+    }
+
+    private Set<Integer> getOddVertices(SimpleWeightedGraph<Integer, DefaultWeightedEdge> mst) {
+        Set<Integer> vertices = new HashSet<>();
+        for (Integer vertex : mst.vertexSet())
+        {
+            if (mst.degreeOf(vertex) % 2 == 1)
+            {
+                vertices.add(vertex);
+            }
+        }
+        return vertices;
+    }
+
+    private GraphPath<Integer, DefaultWeightedEdge> getEulerianTour(SimpleWeightedGraph<Integer, DefaultWeightedEdge> multigraph)
+    {
+        // a tour = cycle that visits every edge exactly once (allows revisiting vertices) and starts and ends
+        // at the same vertex
+        HierholzerEulerianCycle<Integer,DefaultWeightedEdge> eulerianCycle = new HierholzerEulerianCycle<>();
+        GraphPath<Integer,DefaultWeightedEdge> cycle = null;
+
+        if (eulerianCycle.isEulerian(multigraph))
+            cycle = eulerianCycle.getEulerianCycle(multigraph);
+
+        return cycle;
     }
 
     private SimpleWeightedGraph<Integer, DefaultWeightedEdge> combineMatchingWithMST(
@@ -180,19 +227,19 @@ public class TSP {
             MatchingAlgorithm.Matching<Integer, DefaultWeightedEdge> perfectMatching)
     {
         // first create a new graph which is a copy of mst
-        SimpleWeightedGraph<Integer,DefaultWeightedEdge> multigraph =
+        // this guarantees that includes all vertices in perfect matching
+        SimpleWeightedGraph<Integer,DefaultWeightedEdge> pseudograph =
                 (SimpleWeightedGraph<Integer, DefaultWeightedEdge>) copyAsSimpleWeightedGraph(mst);
 
-        // add edges from matching to mst
+        // add edges from perfect matching to pseudograph
         for (DefaultWeightedEdge edge : perfectMatching.getEdges())
         {
-            addVerticesAndEdge(multigraph,
-                    multigraph.getEdgeSource(edge),
-                    multigraph.getEdgeTarget(edge),
-                    (int) multigraph.getEdgeWeight(edge));
+            addEdge(pseudograph,
+                    pseudograph.getEdgeSource(edge),
+                    pseudograph.getEdgeTarget(edge),
+                    (int) pseudograph.getEdgeWeight(edge));
         }
-
-        return multigraph;
+        return pseudograph;
     }
 
     private MatchingAlgorithm.Matching<Integer, DefaultWeightedEdge> createMinimumWeightPerfectMatching(
@@ -204,27 +251,27 @@ public class TSP {
         return matching;
     }
 
-    private SimpleWeightedGraph<Integer, DefaultWeightedEdge> createSubgraphWithOddDegreeVertices(
+    private SimpleWeightedGraph<Integer, DefaultWeightedEdge> createInducedSubgraph(
             SimpleWeightedGraph<Integer, DefaultWeightedEdge> map,
-            SimpleWeightedGraph<Integer, DefaultWeightedEdge> mst)
+            Set<Integer> oddVertices)
     {
         // create a hard copy of the graph on which we will construct a solution
-        SimpleWeightedGraph<Integer, DefaultWeightedEdge> solution =
+        SimpleWeightedGraph<Integer, DefaultWeightedEdge> subgraph =
                 (SimpleWeightedGraph<Integer, DefaultWeightedEdge>) copyAsSimpleWeightedGraph(map);
 
         // check every vertex on "map" and
-        // keep only those that are in the MST and have odd degree on MST graph
+        // keep only those in oddVertices
         for (Integer vertex : map.vertexSet())
         {
-            // is it not contained in MST || does it have even degree
-            if (!mst.containsVertex(vertex) || (mst.degreeOf(vertex) % 2) == 0)
+            // is the vertex NOT in the Set?
+            if (!oddVertices.contains(vertex))
             {
-                // remove it if any of above is correct
-                solution.removeVertex(vertex);
+                // remove it if the above is correct
+                subgraph.removeVertex(vertex);
             }
         }
 
-        return solution;
+        return subgraph;
     }
 
     private SimpleWeightedGraph<Integer, DefaultWeightedEdge> preorderWalk(
@@ -416,7 +463,18 @@ public class TSP {
      */
     private void addEdge(SimpleWeightedGraph<Integer, DefaultWeightedEdge> graph, int firstPoint, int secondPoint, int weight) {
         DefaultWeightedEdge newEdge = graph.addEdge(firstPoint, secondPoint);
-        graph.setEdgeWeight(newEdge, weight);
+
+        if (newEdge != null) graph.setEdgeWeight(newEdge, weight);
+        else newEdge = graph.getEdge(firstPoint,secondPoint);
+
+        if (newEdge == null)
+        {
+            System.out.println(graph.toString());
+            System.out.println("First point: " + firstPoint);
+            System.out.println("Second point: " + secondPoint);
+            System.out.println("Weight: " + weight);
+            System.exit(101);
+        }
     }
 
     private void addVerticesAndEdge(SimpleWeightedGraph<Integer, DefaultWeightedEdge> graph,
