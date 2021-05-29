@@ -7,7 +7,7 @@ import java.util.Random;
 public class Assignment {
     static long instanceSeed = 6576784240994791645L;
     static long algorithmsSeed = 123;
-    final static int numNodes = 4;
+    final static int numNodes = 400;
     final static int numOfRepetitions = 1000;
     final static boolean randomGraph = false;
 
@@ -17,6 +17,7 @@ public class Assignment {
         TSP tsp = new TSP();
         SimpleWeightedGraph<Integer, DefaultWeightedEdge> solutionGreedy;
         SimpleWeightedGraph<Integer, DefaultWeightedEdge> solutionApx;
+        SimpleWeightedGraph<Integer, DefaultWeightedEdge> solutionChristofides;
         SimpleWeightedGraph<Integer, DefaultWeightedEdge> instance = null;
         int i = 0;
 
@@ -36,22 +37,36 @@ public class Assignment {
 
             // call greedy neighbour first algorithm
             solutionGreedy = tsp.greedyNearestNeighbour(algorithmsSeed);
+
             // reset graph instance, to be extra safe
             tsp.setGraph(instance);
             // call 2-apx algorithm
             solutionApx = tsp.apxAlgorithm(algorithmsSeed);
+
             // reset graph instance, to be extra safe
             tsp.setGraph(instance);
-            // TODO call Christofides Algorithm
-            if (!tsp.christofidesAlgorithm(algorithmsSeed)) break;
+            // Christofides Algorithm
+            solutionChristofides = tsp.christofidesAlgorithm(algorithmsSeed);
+            if (solutionChristofides == null){
+                System.out.println("Christofides is NULL");
+                break;
+            }
+
+            System.out.println("Greedy: " + getDistance(solutionGreedy));
+            System.out.println("2-Apx: " + getDistance(solutionApx));
+            System.out.println("Christofides: " + getDistance(solutionChristofides));
 
             i++;
             System.out.println(i);
-        } while (getDistance(solutionGreedy)*2 >= getDistance(solutionApx) && i < numOfRepetitions);
+        } while (
+                getDistance(solutionGreedy)*2 >= getDistance(solutionApx) &&
+                getDistance(solutionGreedy)*1.5 >= getDistance(solutionChristofides) &&
+                i < numOfRepetitions);
 
-        printGraph(instance);
+        //printGraph(instance);
         //printGraph(solutionGreedy);
         //printGraph(solutionApx);
+        //printGraph(solutionChristofides);
         //System.out.println("Greedy: " + getDistance(solutionGreedy));
         //System.out.println("2-Apx: " + getDistance(solutionApx));
         //System.out.println("i: " + i);
@@ -80,6 +95,7 @@ public class Assignment {
 
     public static void printGraph (Graph<Integer, DefaultWeightedEdge> graph)
     {
+        if (graph == null) return;
         System.out.println("-----------------");
         System.out.println(graph.vertexSet().toString());
 
