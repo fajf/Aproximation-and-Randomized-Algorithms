@@ -418,14 +418,14 @@ public class TSP {
     private void fullyConnectVertex(Integer[] vozlisca, Random random, int k) {
         // connect point "k" to the graph
         // assign random distance > 1
-        int defaultUpperBound = (vozlisca.length * 100);
+        int defaultUpperBound = (vozlisca.length * vozlisca.length);
 
         // add a connection between k and first point on the graph
         int weight = random.nextInt(defaultUpperBound);
         if (weight == 0) weight++; // +1 because we don't want distance to be 0
         addEdge((SimpleWeightedGraph<Integer, DefaultWeightedEdge>) this.graph,0, k, weight);
 
-        // generate new edges betweeen newPoint and every other point already on the graph
+        // generate new edges betweeen k and every other point already on the graph
         for (int i = 1; i < k; i++) {
             // calculate upper & lower bound for next edge that is going to be added to this vertex
             int upperBound = calculateUpperBound(this.graph, k, i);
@@ -433,8 +433,22 @@ public class TSP {
 
             // get random value between lower and upper bounds
             int diff = upperBound - lowerBound;
-            weight = random.nextInt(diff);
-            weight += lowerBound;
+            if (diff == 0)
+                weight = lowerBound;
+            else {
+                if (diff < 1) {
+                    System.out.println(this.graph.vertexSet().toString());
+                    for (DefaultWeightedEdge edge : this.graph.edgeSet())
+                    {
+                        System.out.println(edge.toString() + " : " + this.graph.getEdgeWeight(edge));
+                    }
+                    System.out.println("Edge: " + k + "--" + i);
+                    System.out.println("Upper bound: " + upperBound);
+                    System.out.println("Lower bound: " + lowerBound);
+                }
+                weight = random.nextInt(diff);
+                weight += lowerBound;
+            }
 
             this.addEdge((SimpleWeightedGraph<Integer, DefaultWeightedEdge>) this.graph, i, k, weight);
         }
@@ -462,7 +476,9 @@ public class TSP {
             // in potem iz tistih točk do točke, na katero se povezujem
             int drugiDel = (int) graph.getEdgeWeight(graph.getEdge(y,z));
 
-            if (prviDel+drugiDel < upperBound) upperBound = prviDel + drugiDel;
+            int val = prviDel + drugiDel;
+
+            if (val < upperBound) upperBound = val;
         }
 
         return upperBound;
@@ -481,7 +497,7 @@ public class TSP {
         // set to 1, because we don't want point on graph to be on the same positions
         int lowerBound = 1;
 
-        // for each point (z) we are connecting to, check upper bound considering triangle inequality from us (x) to
+        // for each point (z) we are connecting to, check lower bound considering triangle inequality from us (x) to
         // every other point we are already connected to (y) and than from that point (y) to our new target (z)
 
         // na vse točke na katere sem že povezan

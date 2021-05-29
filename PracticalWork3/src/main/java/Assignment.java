@@ -1,15 +1,18 @@
+import com.opencsv.CSVWriter;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.DefaultWeightedEdge;
 import org.jgrapht.graph.SimpleWeightedGraph;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.util.Random;
 
 public class Assignment {
-    static long instanceSeed = 6576784240994791645L;
+    static long instanceSeed = -1;
     static long algorithmsSeed = 123;
-    final static int numNodes = 400;
+    static int numNodes = 200;
     final static int numOfRepetitions = 1000;
-    final static boolean randomGraph = false;
+    static boolean randomGraph = true;
 
     public static void main(String[] args) {
         // implement TSP instance generator that obeys triangular inequality
@@ -19,49 +22,71 @@ public class Assignment {
         SimpleWeightedGraph<Integer, DefaultWeightedEdge> solutionApx;
         SimpleWeightedGraph<Integer, DefaultWeightedEdge> solutionChristofides;
         SimpleWeightedGraph<Integer, DefaultWeightedEdge> instance = null;
-        int i = 0;
 
-        do {
-            if (randomGraph)
-            {
-                Random random = new Random();
-                instanceSeed = random.nextLong();
+        // double check
+        if (instanceSeed <= 0) randomGraph = true;
+
+        int[] numNodesList = {10, 50, 100, 200, 400};
+
+        for (int x = 0; x < numNodesList.length; x++) {
+            int i = 0;
+            numNodes = numNodesList[x];
+
+            String fileName = String.valueOf(numNodes) + "-Vertices.csv";
+            File file = new File(fileName);
+            FileWriter outputfile = null;
+            CSVWriter writer = null;
+            try {
+                outputfile = new FileWriter(file);
+                writer = new CSVWriter(outputfile);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
 
-            if (randomGraph || i == 0)
-                instance =
-                        (SimpleWeightedGraph<Integer, DefaultWeightedEdge>)
-                                tsp.generateInstance(numNodes, 0, instanceSeed, true);
+            do {
+                if (randomGraph) {
+                    Random random = new Random();
+                    instanceSeed = random.nextLong();
+                }
 
-            if (!randomGraph) algorithmsSeed++;
+                if (randomGraph || i == 0)
+                    instance =
+                            (SimpleWeightedGraph<Integer, DefaultWeightedEdge>)
+                                    tsp.generateInstance(numNodes, 0, instanceSeed, true);
 
-            // call greedy neighbour first algorithm
-            solutionGreedy = tsp.greedyNearestNeighbour(algorithmsSeed);
+                if (!randomGraph) algorithmsSeed++;
 
-            // reset graph instance, to be extra safe
-            tsp.setGraph(instance);
-            // call 2-apx algorithm
-            solutionApx = tsp.apxAlgorithm(algorithmsSeed);
+                // call greedy neighbour first algorithm
+                solutionGreedy = tsp.greedyNearestNeighbour(algorithmsSeed);
 
-            // reset graph instance, to be extra safe
-            tsp.setGraph(instance);
-            // Christofides Algorithm
-            solutionChristofides = tsp.christofidesAlgorithm(algorithmsSeed);
-            if (solutionChristofides == null){
-                System.out.println("Christofides is NULL");
-                break;
-            }
+                // reset graph instance, to be extra safe
+                tsp.setGraph(instance);
+                // call 2-apx algorithm
+                solutionApx = tsp.apxAlgorithm(algorithmsSeed);
 
-            System.out.println("Greedy: " + getDistance(solutionGreedy));
-            System.out.println("2-Apx: " + getDistance(solutionApx));
-            System.out.println("Christofides: " + getDistance(solutionChristofides));
+                // reset graph instance, to be extra safe
+                tsp.setGraph(instance);
+                // Christofides Algorithm
+                solutionChristofides = tsp.christofidesAlgorithm(algorithmsSeed);
+                if (solutionChristofides == null) {
+                    System.out.println("Christofides is NULL");
+                    break;
+                }
 
-            i++;
-            System.out.println(i);
-        } while (
-                getDistance(solutionGreedy)*2 >= getDistance(solutionApx) &&
-                getDistance(solutionGreedy)*1.5 >= getDistance(solutionChristofides) &&
-                i < numOfRepetitions);
+                writeToFile(writer, getDistance(solutionGreedy), getDistance(solutionApx), getDistance(solutionChristofides));
+
+                i++;
+                System.out.println(i);
+            } while (
+                    getDistance(solutionGreedy) * 2 >= getDistance(solutionApx) &&
+                            getDistance(solutionGreedy) * 1.5 >= getDistance(solutionChristofides) &&
+                            i < numOfRepetitions);
+
+            try {
+                writer.close();
+                outputfile.close();
+            } catch (Exception e) {e.printStackTrace();}
+        }
 
         //printGraph(instance);
         //printGraph(solutionGreedy);
@@ -70,9 +95,13 @@ public class Assignment {
         //System.out.println("Greedy: " + getDistance(solutionGreedy));
         //System.out.println("2-Apx: " + getDistance(solutionApx));
         //System.out.println("i: " + i);
-        System.out.println("Instance seed: " + instanceSeed);
+        //System.out.println("Instance seed: " + instanceSeed);
+    }
 
-        // TODO analyze performance and runtime
+    private static void writeToFile(CSVWriter writer, int distance, int distance1, int distance2)
+    {
+        String[] data = {String.valueOf(distance), String.valueOf(distance1), String.valueOf(distance2)};
+        writer.writeNext(data);
     }
 
     private static int getDistance(SimpleWeightedGraph<Integer, DefaultWeightedEdge> graph) {
