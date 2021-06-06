@@ -5,13 +5,15 @@ import org.jgrapht.graph.SimpleWeightedGraph;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Random;
 
 public class Assignment {
     static long instanceSeed = -1;
     static long algorithmsSeed = 123;
     static int numNodes = 200;
-    final static int numOfRepetitions = 1000;
+    final static int numOfRepetitions = 30;
     static boolean randomGraph = true;
 
     public static void main(String[] args) {
@@ -26,13 +28,13 @@ public class Assignment {
         // double check
         if (instanceSeed <= 0) randomGraph = true;
 
-        int[] numNodesList = {10, 50, 100, 200, 400};
+        int[] numNodesList = {50,100,150,200,250,300,350,400,450,500,550,600,650,700,750,800};
 
         for (int x = 0; x < numNodesList.length; x++) {
             int i = 0;
             numNodes = numNodesList[x];
 
-            String fileName = String.valueOf(numNodes) + "-Vertices.csv";
+            String fileName = String.valueOf(numNodes) + "-VerticesTime.csv";
             File file = new File(fileName);
             FileWriter outputfile = null;
             CSVWriter writer = null;
@@ -49,31 +51,45 @@ public class Assignment {
                     instanceSeed = random.nextLong();
                 }
 
-                if (randomGraph || i == 0)
+                if (randomGraph || i == 0) {
+                    Instant start = Instant.now();
                     instance =
                             (SimpleWeightedGraph<Integer, DefaultWeightedEdge>)
                                     tsp.generateInstance(numNodes, 0, instanceSeed, true);
+                    Instant stop = Instant.now();
+                    long elapse = Duration.between(start,stop).toSeconds();
+                    System.out.println(numNodes + ":" + elapse);
+                }
 
                 if (!randomGraph) algorithmsSeed++;
 
                 // call greedy neighbour first algorithm
+                Instant start = Instant.now();
                 solutionGreedy = tsp.greedyNearestNeighbour(algorithmsSeed);
+                Instant stop = Instant.now();
+                long elapsedGreedy = Duration.between(start,stop).toMillis();
 
                 // reset graph instance, to be extra safe
                 tsp.setGraph(instance);
                 // call 2-apx algorithm
+                start = Instant.now();
                 solutionApx = tsp.apxAlgorithm(algorithmsSeed);
+                stop = Instant.now();
+                long elapsedApx = Duration.between(start,stop).toMillis();
 
                 // reset graph instance, to be extra safe
                 tsp.setGraph(instance);
                 // Christofides Algorithm
+                start = Instant.now();
                 solutionChristofides = tsp.christofidesAlgorithm(algorithmsSeed);
+                stop = Instant.now();
+                long elapsedChristofides = Duration.between(start,stop).toMillis();
                 if (solutionChristofides == null) {
                     System.out.println("Christofides is NULL");
                     break;
                 }
 
-                writeToFile(writer, getDistance(solutionGreedy), getDistance(solutionApx), getDistance(solutionChristofides));
+                writeToFile(writer, elapsedGreedy, elapsedApx, elapsedChristofides);
 
                 i++;
                 System.out.println(i);
@@ -99,6 +115,12 @@ public class Assignment {
     }
 
     private static void writeToFile(CSVWriter writer, int distance, int distance1, int distance2)
+    {
+        String[] data = {String.valueOf(distance), String.valueOf(distance1), String.valueOf(distance2)};
+        writer.writeNext(data);
+    }
+
+    private static void writeToFile(CSVWriter writer, long distance, long distance1, long distance2)
     {
         String[] data = {String.valueOf(distance), String.valueOf(distance1), String.valueOf(distance2)};
         writer.writeNext(data);
